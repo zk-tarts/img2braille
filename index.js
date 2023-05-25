@@ -1,13 +1,11 @@
 /// <reference types="@webgpu/types" />
 window.addEventListener("DOMContentLoaded", async () => {
-    const res = await fetch ('./kernel.wgsl')
-    const shader_src =  await res.text()
-    const imageWidth = 255;
-    const imageHeight = 255;
-    const threshold = 0.5;
+    const output_container = document.getElementById('output_container')
+    const shader_src = await fetch ('./kernel.wgsl').then(res=>res.text())
+    const threshold = 0.993;
 
     if (!("gpu" in navigator)) {
-        console.log("WebGPU is not supported. Enable chrome://flags/#enable-unsafe-webgpu flag.");
+        console.log("WebGPU is not supported.");
         return;
     }
 
@@ -17,18 +15,28 @@ window.addEventListener("DOMContentLoaded", async () => {
         return;
     }
     const device= await adapter.requestDevice()
-    
-    const inputTexture = device.createTexture({
+    const image = await loadImage('https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Banana-Single.jpg/160px-Banana-Single.jpg')
+    output_container.style.width =  `${image.width/2}ch`
+    output_container.style.wordBreak = 'break-word'
+    const texture = device.createTexture({
         size: {
-            width : imageWidth,
-            height: imageHeight,
+            width : image.width,
+            height: image.height,
         },
         format: "rgba8unorm",
-        usage: GPUTextureUsage.TEXTURE_BINDING
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
     })
-    
+
+    const bitmap = await createImageBitmap(image)
+    device.queue.copyExternalImageToTexture(
+        {source: bitmap},
+        {texture},
+        {width: image.width, height: image.height, depthOrArrayLayers: 1}
+    )
+
+    const outputSize =  (image.height * image.width) /2
     const outputBuffer = device.createBuffer({
-        size: Math.floor(imageHeight*imageWidth / 8),
+        size: outputSize,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
     })
 
@@ -40,8 +48,8 @@ window.addEventListener("DOMContentLoaded", async () => {
             module: shaderModule,
             entryPoint : "main",
             constants: {
-                imageWidth,
-                imageHeight,
+                imageWidth: image.width,
+                imageHeight: image.height,
                 threshold,
             },
         },
@@ -52,7 +60,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         entries: [
             {
                 binding: 0,
-                resource: inputTexture.createView()
+                resource: texture.createView()
             },
             {
                 binding: 1,
@@ -67,13 +75,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(computePipeline)
     passEncoder.setBindGroup(0,bindgroup)
-    const workgroupCountX = Math.ceil(imageHeight / 8*2);
-    const workgroupCountY = Math.ceil(imageWidth / 8*4);
+    const workgroupCountX = Math.ceil(image.width / 2)
+    const workgroupCountY = Math.ceil(image.height / 4)
     passEncoder.dispatchWorkgroups(workgroupCountX, workgroupCountY);      
-    passEncoder.end()
+    passEncoder.end()   
 
     const gpuReadBuffer = device.createBuffer({
-        size: Math.floor(imageHeight*imageWidth / 8),
+        size: outputSize,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
     })
 
@@ -82,7 +90,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         0,
         gpuReadBuffer,
         0,
-        Math.floor(imageHeight*imageWidth / 8)
+        outputSize
     )
 
     const gpuCommands = commandEncoder.finish()
@@ -90,17 +98,27 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     await gpuReadBuffer.mapAsync(GPUMapMode.READ);
     const result_buffer = gpuReadBuffer.getMappedRange()
-    console.log(_arrayBufferToString(result_buffer))
+    output_container.textContent = _arrayBufferToString(result_buffer)
 })
 
 // stolen from stack overflow
 function _arrayBufferToString( buffer ) {
     var binary = '';
-    var bytes = new Uint8Array( buffer );
-    var len = bytes.byteLength;
+    var bytes = new Uint32Array( buffer );
+    var len = bytes.byteLength / bytes.BYTES_PER_ELEMENT;
     for (var i = 0; i < len; i++) {
-        binary += String.fromCharCode( bytes[ i ] );
+        binary += String.fromCodePoint( bytes[ i ] );
     }
     return binary
+}
+
+function loadImage(url) {
+    return new Promise((resolve, reject) => {
+        const image = new Image()
+        image.crossOrigin = 'anonymous'
+        image.onload = () => resolve(image)
+        image.onerror = reject
+        image.src = url
+    })
 }
     

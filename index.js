@@ -16,12 +16,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
     const device= await adapter.requestDevice()
     const image = await loadImage('https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Banana-Single.jpg/160px-Banana-Single.jpg')
-    output_container.style.width =  `${image.width/2}ch`
-    output_container.style.wordBreak = 'break-word'
+    output_container.style.width =  `${image.width}ch`
+    output_container.style.lineBreak = 'anywhere'
+    const imageWidth = image.width %2 == 0 ? image.width : image.width + 1  
+    const imageHeight = image.height%4 == 0  ? image.height : image.height + (4-(image.height%4))
+    console.log(imageWidth, imageHeight)
     const texture = device.createTexture({
         size: {
-            width : image.width,
-            height: image.height,
+            width : imageWidth,
+            height: imageHeight,
         },
         format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
@@ -34,9 +37,9 @@ window.addEventListener("DOMContentLoaded", async () => {
         {width: image.width, height: image.height, depthOrArrayLayers: 1}
     )
 
-    const outputSize =  (image.height * image.width) /2
+    const outputSize =  (imageHeight / 4) * (imageWidth / 2)
     const outputBuffer = device.createBuffer({
-        size: outputSize,
+        size: outputSize ,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
     })
 
@@ -48,8 +51,8 @@ window.addEventListener("DOMContentLoaded", async () => {
             module: shaderModule,
             entryPoint : "main",
             constants: {
-                imageWidth: image.width,
-                imageHeight: image.height,
+                imageWidth,
+                imageHeight,
                 threshold,
             },
         },
@@ -75,13 +78,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(computePipeline)
     passEncoder.setBindGroup(0,bindgroup)
-    const workgroupCountX = Math.ceil(image.width / 2)
-    const workgroupCountY = Math.ceil(image.height / 4)
+    const workgroupCountX = imageWidth / 2
+    const workgroupCountY = imageHeight / 4
     passEncoder.dispatchWorkgroups(workgroupCountX, workgroupCountY);      
     passEncoder.end()   
 
     const gpuReadBuffer = device.createBuffer({
-        size: outputSize,
+        size: outputSize ,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
     })
 
@@ -90,7 +93,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         0,
         gpuReadBuffer,
         0,
-        outputSize
+        outputSize 
     )
 
     const gpuCommands = commandEncoder.finish()
@@ -98,16 +101,17 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     await gpuReadBuffer.mapAsync(GPUMapMode.READ);
     const result_buffer = gpuReadBuffer.getMappedRange()
+    console.log(result_buffer)
     output_container.textContent = _arrayBufferToString(result_buffer)
 })
 
 // stolen from stack overflow
 function _arrayBufferToString( buffer ) {
     var binary = '';
-    var bytes = new Uint32Array( buffer );
+    var bytes = new Uint16Array( buffer );
     var len = bytes.byteLength / bytes.BYTES_PER_ELEMENT;
     for (var i = 0; i < len; i++) {
-        binary += String.fromCodePoint( bytes[ i ] );
+        binary += String.fromCharCode( bytes[ i ] );
     }
     return binary
 }

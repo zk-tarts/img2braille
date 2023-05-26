@@ -16,8 +16,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
     const device= await adapter.requestDevice()
     const image = await loadImage('https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Banana-Single.jpg/160px-Banana-Single.jpg')
-    output_container.style.width =  `${image.width}ch`
-    output_container.style.lineBreak = 'anywhere'
     const imageWidth = image.width %2 == 0 ? image.width : image.width + 1  
     const imageHeight = image.height%4 == 0  ? image.height : image.height + (4-(image.height%4))
     console.log(imageWidth, imageHeight)
@@ -37,7 +35,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         {width: image.width, height: image.height, depthOrArrayLayers: 1}
     )
 
-    const outputSize =  (imageHeight / 4) * (imageWidth / 2)
+    const outputSize =  (imageHeight / 4 ) * (imageWidth / 2)
     const outputBuffer = device.createBuffer({
         size: outputSize ,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
@@ -108,7 +106,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 // stolen from stack overflow
 function _arrayBufferToString( buffer ) {
     var binary = '';
-    var bytes = new Uint16Array( buffer );
+    var bytes = new Uint32Array( buffer );
     var len = bytes.byteLength / bytes.BYTES_PER_ELEMENT;
     for (var i = 0; i < len; i++) {
         binary += String.fromCharCode( bytes[ i ] );

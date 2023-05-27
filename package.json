@@ -8,7 +8,7 @@
   },
   "author": "",
   "license": "MIT",
-  "dependencies": {
+  "dev-dependencies": {
     "@webgpu/types": "^0.1.32"
   }
 }

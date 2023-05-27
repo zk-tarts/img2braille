@@ -1,9 +1,11 @@
 /// <reference types="@webgpu/types" />
-window.addEventListener("DOMContentLoaded", async () => {
+    
+(async () => {
+    await waitUntilLoaded()
+    const slider = document.getElementById("slider")
+    const invertBox = document.getElementById("invert")
     const output_container = document.getElementById('output_container')
     const shader_src = await fetch ('./kernel.wgsl').then(res=>res.text())
-    const threshold = 0.993;
-
     if (!("gpu" in navigator)) {
         console.log("WebGPU is not supported.");
         return;
@@ -35,7 +37,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         {width: image.width, height: image.height, depthOrArrayLayers: 1}
     )
 
-    const outputSize =  (imageHeight / 4 ) * (imageWidth / 2)
+    const outputSize =  imageHeight * imageWidth/2
     const outputBuffer = device.createBuffer({
         size: outputSize ,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
@@ -43,67 +45,71 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     const shaderModule = device.createShaderModule({code: shader_src})
     
-    const computePipeline = device.createComputePipeline({
-        layout: "auto",
-        compute : {
-            module: shaderModule,
-            entryPoint : "main",
-            constants: {
-                imageWidth,
-                imageHeight,
-                threshold,
+    async function runCalculation(threshold, invert) {
+        const computePipeline = device.createComputePipeline({
+            layout: "auto",
+            compute : {
+                module: shaderModule,
+                entryPoint : "main",
+                constants: {
+                    imageWidth,
+                    imageHeight,
+                    threshold,
+                    invert,
+                },
             },
-        },
-    })
-    
-    const bindgroup = device.createBindGroup({
-        layout: computePipeline.getBindGroupLayout(0),
-        entries: [
-            {
-                binding: 0,
-                resource: texture.createView()
-            },
-            {
-                binding: 1,
-                resource: {
-                    buffer: outputBuffer
+        })
+
+        const bindgroup = device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0),
+            entries: [
+                {
+                    binding: 0,
+                    resource: texture.createView()
+                },
+                {
+                    binding: 1,
+                    resource: {
+                        buffer: outputBuffer
+                    }
                 }
-            }
-        ]
-    })
+            ]
+        })
 
-    const commandEncoder = device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(computePipeline)
-    passEncoder.setBindGroup(0,bindgroup)
-    const workgroupCountX = imageWidth / 2
-    const workgroupCountY = imageHeight / 4
-    passEncoder.dispatchWorkgroups(workgroupCountX, workgroupCountY);      
-    passEncoder.end()   
+        const commandEncoder = device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(computePipeline)
+        passEncoder.setBindGroup(0,bindgroup)
+        const workgroupCountX = imageWidth / 2
+        const workgroupCountY = imageHeight / 4
+        passEncoder.dispatchWorkgroups(workgroupCountX, workgroupCountY);      
+        passEncoder.end()   
 
-    const gpuReadBuffer = device.createBuffer({
-        size: outputSize ,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-    })
+        const gpuReadBuffer = device.createBuffer({
+            size: outputSize ,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        })
 
-    commandEncoder.copyBufferToBuffer(
-        outputBuffer,
-        0,
-        gpuReadBuffer,
-        0,
-        outputSize 
-    )
+        commandEncoder.copyBufferToBuffer(
+            outputBuffer,
+            0,
+            gpuReadBuffer,
+            0,
+            outputSize 
+        )
 
-    const gpuCommands = commandEncoder.finish()
-    device.queue.submit([gpuCommands])
+        const gpuCommands = commandEncoder.finish()
+        device.queue.submit([gpuCommands])
 
-    await gpuReadBuffer.mapAsync(GPUMapMode.READ);
-    const result_buffer = gpuReadBuffer.getMappedRange()
-    console.log(result_buffer)
-    output_container.textContent = _arrayBufferToString(result_buffer)
-})
+        await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+        const result_buffer = gpuReadBuffer.getMappedRange()
+        output_container.textContent = _arrayBufferToString(result_buffer)
+    }
+    slider.addEventListener('input', async () => await runCalculation(slider.value/100, invertBox.checked))
+    invertBox.addEventListener('input', async () => await runCalculation(slider.value/100, invertBox.checked))
+})()
 
-// stolen from stack overflow
+// stolen from stack overflow 
 function _arrayBufferToString( buffer ) {
     var binary = '';
     var bytes = new Uint32Array( buffer );
@@ -123,4 +129,9 @@ function loadImage(url) {
         image.src = url
     })
 }
-    
+
+function waitUntilLoaded() {
+    return new Promise((resolve, reject) => {
+        window.addEventListener("DOMContentLoaded", resolve)
+    })
+}

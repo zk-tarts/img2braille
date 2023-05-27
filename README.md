@@ -15,7 +15,6 @@ Thanks to https://developer.mozilla.org/en-US/docs/Web/API/webGPU_API and some o
  - twitch emote or FFZ/BTTV/7TV integration
   - this includes making the spam the right size (and making a nice looking webpage (ew))
  - optimize it. 
-  - Im wasting memory by using u32 for one character. Can use u16 but wgsl has no u16 type so i have to manually pack it.
-  - Can use a textDecoder if I properly pack
+  - Im wasting memory by using u32 for one character. Can use u16 but wgsl has no u16 type so i have to manually pack it. Can use a textDecoder in js if I properly pack
   - Other stuff. I dont know if i even implemented this effieciently right now or if theres a lot of perf left on the table
  - Batch image processing. The GPU should be able to do way more than one picture at a time (cuz its fast) 
